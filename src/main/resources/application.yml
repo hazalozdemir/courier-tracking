@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: courier-tracking
+  datasource:
+    # File-based H2 so data survives restarts; override with a real RDBMS in production.
+    url: jdbc:h2:file:./data/courier-tracking;LOCK_TIMEOUT=5000
+    username: sa
+    password: ""
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      jakarta.persistence.lock.timeout: 5000
+  h2:
+    console:
+      enabled: false
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+
+courier-tracking:
+  stores-location: classpath:stores.json
+  store-radius-meters: 100
+  reentry-cooldown: 1m
+  max-clock-skew: 5m
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+server:
+  error:
+    include-stacktrace: never
