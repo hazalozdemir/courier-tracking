@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kurye Takip Demo</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root {
+    --orange: #F37021;
+    --orange-dark: #D85A0E;
+    --orange-soft: #FFF1E6;
+    --ink: #2B2B2B;
+    --muted: #7A7A7A;
+    --line: #F0E3D8;
+    --card: #FFFFFF;
+    --bg: #FFF8F2;
+    --ok: #2E9E5B;
+    --bad: #D6372B;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); }
+  header { background: var(--orange); color: #fff; padding: 14px 24px; display: flex; align-items: center; gap: 14px; box-shadow: 0 2px 10px rgba(243,112,33,.35); }
+  header .logo { font-weight: 900; font-size: 22px; letter-spacing: -.5px; background: #fff; color: var(--orange); padding: 2px 12px; border-radius: 999px; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 700; }
+  header .sub { opacity: .9; font-size: 13px; }
+  header .health { margin-left: auto; font-size: 13px; background: rgba(255,255,255,.2); padding: 4px 12px; border-radius: 999px; }
+  main { display: grid; grid-template-columns: 340px 1fr; gap: 16px; padding: 16px; max-width: 1400px; margin: 0 auto; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border-radius: 16px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.06); border: 1px solid var(--line); }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .8px; color: var(--orange-dark); margin: 0 0 10px; }
+  .side { display: flex; flex-direction: column; gap: 16px; }
+  label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+  input, select { width: 100%; padding: 9px 12px; border: 1.5px solid var(--line); border-radius: 10px; font: inherit; background: #fff; }
+  input:focus, select:focus { outline: none; border-color: var(--orange); }
+  .row { display: flex; gap: 8px; margin-top: 10px; }
+  button { font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 9px 12px; cursor: pointer; background: var(--orange); color: #fff; flex: 1; transition: transform .1s, background .15s; }
+  button:hover { background: var(--orange-dark); }
+  button:active { transform: scale(.97); }
+  button.ghost { background: var(--orange-soft); color: var(--orange-dark); }
+  button.ghost:hover { background: #FFE2CC; }
+  button:disabled { opacity: .5; cursor: wait; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat { background: var(--orange-soft); border-radius: 12px; padding: 12px; text-align: center; }
+  .stat b { display: block; font-size: 24px; color: var(--orange-dark); }
+  .stat span { font-size: 12px; color: var(--muted); }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li.entry { padding: 8px 10px; border-radius: 10px; background: var(--orange-soft); margin-bottom: 6px; font-size: 13px; }
+  li.entry small { color: var(--muted); display: block; }
+  .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 8px; }
+  #map { height: 560px; border-radius: 16px; border: 1px solid var(--line); box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  #log { max-height: 220px; overflow: auto; font: 12px/1.5 ui-monospace, Menlo, monospace; }
+  #log div { padding: 3px 0; border-bottom: 1px dashed var(--line); }
+  #log .ok { color: var(--ok); } #log .stale { color: var(--muted); } #log .err { color: var(--bad); }
+  .toast { position: fixed; right: 20px; bottom: 20px; background: var(--ink); color: #fff; padding: 12px 18px; border-radius: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.25); transform: translateY(80px); opacity: 0; transition: .3s; z-index: 2000; }
+  .toast.show { transform: none; opacity: 1; }
+  .toast b { color: #FFB27A; }
+  .store-pin { background: var(--orange); color: #fff; font-weight: 900; border-radius: 50%; width: 30px; height: 30px; display: grid; place-items: center; border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.3); font-size: 15px; }
+  .courier-pin { font-size: 28px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.4)); transition: transform .4s; }
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">M</span>
+  <div>
+    <h1>Kurye Takip</h1>
+    <div class="sub">Konum gönder, mağaza girişlerini ve toplam mesafeyi canlı izle</div>
+  </div>
+  <div class="health" id="health">…</div>
+</header>
+
+<main>
+  <div class="side">
+    <section class="card">
+      <h2>Kurye</h2>
+      <label for="courier">Kurye ID</label>
+      <input id="courier" value="kurye-1" maxlength="64">
+      <div class="row">
+        <button class="ghost" id="newCourier">🎲 Yeni kurye</button>
+        <button class="ghost" id="refresh">↻ Yenile</button>
+      </div>
+      <div class="hint">Haritaya tıklayarak o noktadan konum gönderebilirsin.</div>
+    </section>
+
+    <section class="card">
+      <h2>Senaryolar</h2>
+      <label for="storeSel">Mağazaya git</label>
+      <select id="storeSel"></select>
+      <div class="row"><button id="goStore">🛵 Rotayı başlat</button></div>
+      <div class="row">
+        <button class="ghost" id="tour">🗺️ Mağaza turu</button>
+        <button class="ghost" id="cooldown">⏱️ 1 dk kuralı</button>
+      </div>
+      <div class="hint"><b>1 dk kuralı:</b> kurye aynı mağazaya 1 dakika içinde tekrar girer, ikinci giriş sayılmaz.</div>
+    </section>
+
+    <section class="card">
+      <h2>Özet</h2>
+      <div class="stats">
+        <div class="stat"><b id="km">–</b><span>toplam km</span></div>
+        <div class="stat"><b id="cnt">–</b><span>mağaza girişi</span></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Mağaza girişleri</h2>
+      <ul id="entrances"><li class="empty">Henüz giriş yok</li></ul>
+    </section>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+    <div id="map"></div>
+    <section class="card">
+      <h2>API günlüğü</h2>
+      <div id="log"></div>
+    </section>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const API = '/api/v1';
+const RADIUS = 100; // meters, same as backend default
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+let stores = [];
+let lastTime = 0;          // last event time (ms) sent for the current courier
+let busy = false;
+let trail, courierMarker, trailPts = [];
+
+const map = L.map('map').setView([40.99, 29.10], 11);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+
+const courierId = () => $('courier').value.trim();
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function log(msg, cls = '') {
+  const d = document.createElement('div');
+  d.className = cls;
+  d.textContent = new Date().toLocaleTimeString('tr-TR') + '  ' + msg;
+  $('log').prepend(d);
+}
+
+function toast(html) {
+  const t = $('toast');
+  t.innerHTML = html; t.classList.add('show');
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 3200);
+}
+
+// ---- geo helpers
+const R = 6371008.8;
+function dist(a, b) {
+  const rad = x => x * Math.PI / 180;
+  const dLat = rad(b[0] - a[0]), dLng = rad(b[1] - a[1]);
+  const h = Math.sin(dLat/2)**2 + Math.cos(rad(a[0])) * Math.cos(rad(b[0])) * Math.sin(dLng/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function offset(p, northM, eastM) {
+  return [p[0] + (northM / R) * 180 / Math.PI,
+          p[1] + (eastM / (R * Math.cos(p[0] * Math.PI / 180))) * 180 / Math.PI];
+}
+function lerpPath(a, b, stepM) {
+  const n = Math.max(1, Math.ceil(dist(a, b) / stepM));
+  return Array.from({ length: n + 1 }, (_, i) => [a[0] + (b[0]-a[0]) * i/n, a[1] + (b[1]-a[1]) * i/n]);
+}
+
+// ---- API
+async function api(path, opts) {
+  const r = await fetch(API + path, opts);
+  const text = await r.text();
+  let body; try { body = JSON.parse(text); } catch { body = text; }
+  return { status: r.status, body };
+}
+
+async function sendPing(lat, lng, timeMs) {
+  const id = courierId();
+  const payload = { courier: id, time: new Date(timeMs).toISOString(), lat, lng };
+  const { status, body } = await api('/locations', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+  });
+  if (status !== 200) {
+    log(`HTTP ${status}: ${body.detail || JSON.stringify(body)}`, 'err');
+    toast('⚠️ ' + esc(body.detail || 'İstek reddedildi'));
+    return null;
+  }
+  lastTime = Math.max(lastTime, timeMs);
+  const entered = body.enteredStores.length ? `  🏬 ${body.enteredStores.join(', ')}` : '';
+  log(`${body.status}  +${body.distanceAddedMeters.toFixed(0)} m${entered}`, body.status === 'PROCESSED' ? 'ok' : 'stale');
+  moveCourier(lat, lng);
+  if (body.enteredStores.length) toast(`🏬 <b>${esc(body.enteredStores.join(', '))}</b> girişi sayıldı!`);
+  return body;
+}
+
+function moveCourier(lat, lng) {
+  trailPts.push([lat, lng]);
+  trail.setLatLngs(trailPts);
+  courierMarker.setLatLng([lat, lng]);
+  if (!map.hasLayer(courierMarker)) courierMarker.addTo(map);
+}
+
+function resetTrail() {
+  trailPts = []; trail.setLatLngs([]);
+  if (map.hasLayer(courierMarker)) map.removeLayer(courierMarker);
+}
+
+async function refresh() {
+  const id = courierId();
+  if (!id) return;
+  const d = await api(`/couriers/${encodeURIComponent(id)}/total-distance`);
+  if (d.status === 200) {
+    $('km').textContent = d.body.totalDistanceKilometers.toFixed(2);
+    const e = await api(`/couriers/${encodeURIComponent(id)}/store-entrances`);
+    $('cnt').textContent = e.body.length;
+    $('entrances').innerHTML = e.body.length ? e.body.map(x =>
+      `<li class="entry">🏬 ${esc(x.storeName)}<small>${new Date(x.enteredAt).toLocaleTimeString('tr-TR')}</small></li>`).join('')
+      : '<li class="empty">Henüz giriş yok</li>';
+  } else {
+    $('km').textContent = '0.00'; $('cnt').textContent = '0';
+    $('entrances').innerHTML = '<li class="empty">Bu kurye henüz konum göndermedi</li>';
+  }
+}
+
+// Run a list of points as pings spaced `dtSec` apart in event time, ending ~now.
+async function run(points, dtSec = 10, delayMs = 450) {
+  if (busy) return;
+  busy = true; document.querySelectorAll('button').forEach(b => b.disabled = true);
+  try {
+    const start = Math.max(Date.now() - points.length * dtSec * 1000, lastTime + 1000);
+    for (let i = 0; i < points.length; i++) {
+      const res = await sendPing(points[i][0], points[i][1], start + i * dtSec * 1000);
+      if (!res) break;
+      await refresh();
+      map.panTo(points[i], { animate: true });
+      await sleep(delayMs);
+    }
+  } finally {
+    busy = false; document.querySelectorAll('button').forEach(b => b.disabled = false);
+  }
+}
+
+const storePos = s => [s.lat, s.lng];
+const selectedStore = () => stores[$('storeSel').value];
+
+// ---- scenarios
+function startFor(store) {
+  const last = trailPts[trailPts.length - 1];
+  return last || offset(storePos(store), 700, -500);
+}
+
+$('goStore').onclick = () => {
+  const s = selectedStore();
+  run(lerpPath(startFor(s), storePos(s), 70));
+};
+
+$('tour').onclick = () => {
+  const order = ['Ataşehir', 'Novada', 'Caddebostan'].map(n => stores.find(s => s.name.includes(n))).filter(Boolean);
+  let pts = [offset(storePos(order[0]), 600, -400)];
+  if (trailPts.length) pts = [trailPts[trailPts.length - 1]];
+  let path = [];
+  for (const s of order) { path = path.concat(lerpPath(pts[0], storePos(s), 80)); pts = [storePos(s)]; }
+  run(path, 12, 300);
+};
+
+$('cooldown').onclick = () => {
+  const s = selectedStore(), c = storePos(s);
+  const out = offset(c, 300, 0), inside = offset(c, 20, 0);
+  // inside -> out -> inside again, all 15 s apart (< 60 s cooldown)
+  run([out, inside, out, inside], 15, 900);
+};
+
+$('newCourier').onclick = () => {
+  $('courier').value = 'kurye-' + Math.random().toString(36).slice(2, 6);
+  lastTime = 0; resetTrail(); refresh();
+};
+$('refresh').onclick = refresh;
+$('courier').onchange = () => { lastTime = 0; resetTrail(); refresh(); };
+
+map.on('click', e => {
+  if (busy) return;
+  const t = Math.max(Date.now(), lastTime + 1000);
+  sendPing(e.latlng.lat, e.latlng.lng, t).then(refresh);
+});
+
+// ---- boot
+async function init() {
+  trail = L.polyline([], { color: '#F37021', weight: 5, opacity: .85 }).addTo(map);
+  courierMarker = L.marker([0, 0], { icon: L.divIcon({ className: '', html: '<div class="courier-pin">🛵</div>', iconSize: [30, 30], iconAnchor: [15, 15] }), interactive: false });
+
+  try {
+    const h = await (await fetch('/actuator/health')).json();
+    $('health').textContent = h.status === 'UP' ? '● API çalışıyor' : '● API sorunlu';
+  } catch { $('health').textContent = '● API yok'; }
+
+  const r = await api('/stores');
+  stores = r.body;
+  $('storeSel').innerHTML = stores.map((s, i) => `<option value="${i}">${esc(s.name)}</option>`).join('');
+  const bounds = [];
+  stores.forEach(s => {
+    const p = storePos(s);
+    L.circle(p, { radius: RADIUS, color: '#F37021', weight: 2, fillColor: '#F37021', fillOpacity: .18 }).addTo(map);
+    L.marker(p, { icon: L.divIcon({ className: '', html: '<div class="store-pin">M</div>', iconSize: [30, 30], iconAnchor: [15, 15] }) })
+      .bindTooltip(esc(s.name)).addTo(map);
+    bounds.push(p);
+  });
+  map.fitBounds(bounds, { padding: [40, 40] });
+  refresh();
+}
+init();
+</script>
+</body>
+</html>

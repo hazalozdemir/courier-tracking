@@ -16,11 +16,15 @@ Java 17 · Spring Boot 3.3 · Spring Data JPA · Flyway · H2 · springdoc-opena
 
 Docker: `docker build -t courier-tracking . && docker run -p 8080:8080 courier-tracking`
 
-Swagger UI: http://localhost:8080/swagger-ui.html · Health: http://localhost:8080/actuator/health
+UI demo (map): http://localhost:8080/ · Swagger UI: http://localhost:8080/swagger-ui.html · Health: http://localhost:8080/actuator/health
 
 Port 8080 busy? Use `SERVER_PORT=8089 ./mvnw spring-boot:run` and `./demo.sh http://localhost:8089`.
 
 Data is kept in a file-based H2 database under `./data`; delete that folder to start fresh.
+
+### UI demo
+
+The app serves a small single-page demo at `http://localhost:8080/` (`src/main/resources/static/index.html`). It talks to the same REST API (`/api/v1`) from the browser and shows the stores and couriers on a map. Leaflet and the OpenStreetMap tiles are loaded from the internet, so the map needs a connection.
 
 ### Scripts
 
