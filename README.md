@@ -30,7 +30,10 @@ Only need `bash` and `curl`.
 ./scripts/start.sh [--fresh] [--build] [--port N]   # start in background, wait for health
 ./scripts/demo.sh [--auto] [base-url]               # guided walkthrough (same as ./demo.sh)
 ./scripts/stop.sh
+./scripts/curl-examples.sh [base-url]               # plain curl call for every endpoint, copy-pasteable
 ```
+
+`demo.sh` prints the latitude/longitude of every ping it sends. `curl-examples.sh` shows each curl command before running it, so you can copy single calls.
 
 ## API
 

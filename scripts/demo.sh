@@ -38,7 +38,8 @@ ping() {
   status=$(json_field status)
   added=$(json_field distanceAddedMeters)
   stores=$(printf '%s' "$BODY" | sed -n 's/.*"enteredStores":\[\(.*\)\].*/\1/p' | tr -d '"')
-  printf '  %s%s%s  %s %s ' "$DIM" "$(clock "$t")" "$RESET" "$(pad "$courier" 13)" "$(pad "$what" 44)"
+  printf '  %s%s%s  %s %s%s%s  %s ' "$DIM" "$(clock "$t")" "$RESET" "$(pad "$courier" 13)" \
+    "$DIM" "$(pad "lat $lat" 15) $(pad "lng $lng" 14)" "$RESET" "$(pad "$what" 44)"
   if [[ "$STATUS" != 200 ]]; then
     printf '%s✗ HTTP %s%s\n' "$RED" "$STATUS" "$RESET"
   elif [[ "$status" == IGNORED_STALE ]]; then
