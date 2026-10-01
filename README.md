@@ -85,3 +85,26 @@ Write path: `Controller → LocationIngestionService (validation, retry) → Loc
 2. **Observer** – `StoreEntranceEvent` published via Spring's `ApplicationEventPublisher`;
    `StoreEntranceLogger` is a `@TransactionalEventListener` that logs **after commit**. New reactions
    (notifications, Kafka publisher, metrics) are new listeners, ingestion stays unchanged.
+
+## Scaling notes
+
+The current design is intentionally simple: one instance, one database, per-courier row lock. It is
+correct and easy to reason about, but it is not the end state for real streaming volumes. Where it
+would break first and what would change:
+
+| Concern | Today | At scale |
+| ------- | ----- | -------- |
+| Ingestion transport | Synchronous `POST /locations`, one ping per request | Consume from a partitioned log (e.g. Kafka) keyed by `courierId`, with batch ingestion; keep the REST endpoint as a thin producer/adapter |
+| Per-courier ordering and concurrency | `PESSIMISTIC_WRITE` lock on the courier row, retry on first-insert race | Partitioning by `courierId` gives a single consumer per courier, so locks and the insert-race retry disappear; keep `@Version` as a safety net |
+| Hot-path DB access | Each ping reads/updates the `courier` row; each candidate entrance queries the last entrance | Keep courier state (last location, last entrance per store) in memory or Redis in the partition owner, and write to the DB asynchronously/in batches |
+| Store lookup | Linear scan over all stores (O(stores)) | Spatial index (geohash/H3 grid or R-tree) to fetch only nearby stores; trivial for 5 stores, needed for thousands |
+| Write amplification | Update of `courier` on every ping | Coalesce updates (write total distance every N pings or T seconds), or append-only pings plus a periodic aggregate |
+| Raw data | Only last location and running total are stored; late pings are dropped | Append raw pings to a log/time-series store: enables audit, recomputation if the distance algorithm changes, and reprocessing late data |
+| Read path | `getTotalTravelDistance` is O(1) on the courier row | Already cheap; add read replicas or a cache if query volume grows |
+| Database | File-based H2 | PostgreSQL (Flyway migrations are already portable); integration tests via Testcontainers |
+| Horizontal scaling | Single instance (the lock lives in one DB, so multiple instances are safe but contend) | Stateless API instances plus partitioned consumers; scale consumers up to the partition count |
+| Observability | Health endpoint and logs | Micrometer metrics (ingest rate, stale ratio, lock timeouts, entrance count), tracing, alerts on consumer lag |
+
+Accuracy limits that also matter at scale: entrances are detected from pings only, so a fast courier can
+cross the 100 m circle between two pings undetected (segment-circle intersection would fix this), and there
+is no GPS-jitter or impossible-speed filtering (a speed/min-distance threshold would be the first addition).
